@@ -3417,7 +3417,7 @@ body{background:#f6f7f8;color:#243441}
         for(let r=1;r<=rows;r++){
             html+=`<tr><th style="padding:6px;border:1px solid #cbd5e1;">${r}</th>`;
             for(let c=0;c<cols;c++){
-                const celda=String.fromCharCode(65+c)+r, cantidad=window.baseDeDatos.filter(p=>fpEsActivo(p)&&p.rack===rack&&fpNorm(p.ubicacion)===celda).length;
+                const celda=String.fromCharCode(65+c)+r, cantidad=window.baseDeDatos.filter(p=>(fpEsActivo(p)||p.etapaRetrabajo==='Pendiente de envío')&&p.rack===rack&&fpNorm(p.ubicacion)===celda).length;
                 const elegido=fpNorm(ubicacion)===celda;
                 html+=`<td ${elegido?'class="highlight"':''} style="height:36px;border:1px solid #cbd5e1;${elegido?'background:#d1fae5;border:2px solid #059669;color:#065f46;':''}" title="${cantidad} fixture(s) en ${celda}">${celda}${cantidad?`<small style="display:block;">${cantidad} pallets</small>`:''}</td>`;
             }
@@ -3501,7 +3501,7 @@ body{background:#f6f7f8;color:#243441}
         modal.style.display='flex';
         const posiciones=fpUbicaciones(rack);
         if(!posiciones.length){celda.textContent='No hay celdas configuradas para este rack.';return;}
-        const activos=window.baseDeDatos.filter(p=>fpEsActivo(p)&&p.rack===rack);
+        const activos=window.baseDeDatos.filter(p=>(fpEsActivo(p)||p.etapaRetrabajo==='Pendiente de envío')&&p.rack===rack);
         celda.innerHTML=`<h3>${rack==='Effimat'?'Effimat · Resguardo':'Rack '+fpText(rack)} <small>${activos.length} pallet(s)</small></h3><div class="fp-croquis-matrix"></div><div class="fp-croquis-pallets" id="fpCroquisPallets"><p>Selecciona una celda para ver sus pallets.</p></div>`;
         const matrix=celda.querySelector('.fp-croquis-matrix');
         matrix.style.gridTemplateColumns=`repeat(${rack==='3'&&window.matchMedia('(max-width:640px)').matches?3:rack==='3'?11:rack==='Effimat'?1:3},minmax(0,1fr))`;
@@ -3520,7 +3520,7 @@ body{background:#f6f7f8;color:#243441}
     };
     window.fpVerCroquisCelda=function(rack,ubicacion){
         const box=fpGet('fpCroquisPallets');if(!box)return;
-        const pallets=window.baseDeDatos.filter(p=>fpEsActivo(p)&&p.rack===rack&&fpNorm(p.ubicacion)===fpNorm(ubicacion));
+        const pallets=window.baseDeDatos.filter(p=>(fpEsActivo(p)||p.etapaRetrabajo==='Pendiente de envío')&&p.rack===rack&&fpNorm(p.ubicacion)===fpNorm(ubicacion));
         box.replaceChildren();
         const title=document.createElement('h4');title.textContent=`${rack==='Effimat'?'Effimat':'Rack '+rack} / ${ubicacion} · ${pallets.length} pallet(s)`;box.appendChild(title);
         if(!pallets.length){const p=document.createElement('p');p.textContent='No hay pallets activos en esta ubicación.';box.append(p);return;}
