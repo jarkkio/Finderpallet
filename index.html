@@ -1452,7 +1452,7 @@ body{background:#f6f7f8;color:#243441}
                         <th style="padding: 10px; width:15%; color:#b45309;">Modelo</th>
                         <th style="padding: 10px; width:19%; color:#b45309;">Enviado por</th>
                         <th style="padding: 10px; width:40%; color:#b45309;">Motivo de Retrabajo</th>
-                        <th style="padding:10px;color:#b45309;">Ubicación actual</th>
+                        <th style="padding:10px;color:#b45309;">Ubicación / destino</th>
                         <th style="padding:10px;color:#b45309;">Fecha</th>
                         <th style="padding:10px;color:#b45309;">Acción</th>
                     </tr>
@@ -2634,7 +2634,7 @@ body{background:#f6f7f8;color:#243441}
     window.actualizarDisponiblesRetrabajo=function(){
         const lista=fpGet('retrabajoFixturesDisponibles');
         lista.replaceChildren();
-        window.baseDeDatos.filter(p=>fpNorm(p.estatus)!=='RETRABAJO').forEach(p=>{
+        window.baseDeDatos.filter(p=>fpNorm(p.estatus)!=='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío').forEach(p=>{
             lista.appendChild(new Option(`${p.fixture} · ${p.modelo || 'Sin modelo'}`,p.fixture));
         });
     };
@@ -2685,7 +2685,7 @@ body{background:#f6f7f8;color:#243441}
             const candidatos=codigos.map(c=>{
                 const p=fpPalletDisponibleRetrabajo(c);
                 if(!p)errores.push(c+': no encontrado o duplicado en inventario');
-                else if(fpNorm(p.estatus)==='RETRABAJO')errores.push(c+': ya está en retrabajo');
+                else if(fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío')errores.push(c+': ya está en retrabajo o pendiente de envío');
                 return p;
             });
             resumen.textContent=errores.length?'⚠️ Corrige antes de guardar: '+errores.join(' · '):
@@ -2707,7 +2707,7 @@ body{background:#f6f7f8;color:#243441}
         let destino={destinoRetrabajoTipo:'',destinoRetrabajoProveedor:''};
         if(!esPendiente){try{destino=fpDestinoRework('retrabajo');}catch(e){fpMsg('retrabajoMsg',e.message,true);return;}}
         const pallets=codigos.map(fpPalletDisponibleRetrabajo);
-        const invalidos=codigos.filter((c,i)=>!pallets[i]||fpNorm(pallets[i].estatus)==='RETRABAJO');
+        const invalidos=codigos.filter((c,i)=>!pallets[i]||fpNorm(pallets[i].estatus)==='RETRABAJO'||pallets[i].etapaRetrabajo==='Pendiente de envío');
         if(invalidos.length){fpMsg('retrabajoMsg','Revisa los TESTFIX inexistentes, duplicados o ya en retrabajo: '+invalidos.join(', '),true);return;}
         window.mostrarConfirmacion(`¿${esPendiente?'Marcar pendientes':'Enviar a retrabajo'} ${pallets.length} fixture(s)? ${pallets.slice(0,8).map(p=>p.fixture).join(', ')}${pallets.length>8?'…':''}. Ubicaciones reservadas. ${esPendiente?'Aún no se marcará ningún envío.':'Destino: '+destino.destinoRetrabajoTipo+(destino.destinoRetrabajoProveedor?' · '+destino.destinoRetrabajoProveedor:'')}. Motivo: ${motivo}`,async()=>{
             if(fpGuardandoNuevoRetrabajo)return;
@@ -2727,7 +2727,7 @@ body{background:#f6f7f8;color:#243441}
                         if(!snap.exists())throw Error('Ya no existe '+p.fixture);
                         const d=snap.data();
                         if(fpNorm(d.fixture||d.Fixture||d.FIXTURE)!==fpNorm(p.fixture))throw Error('Cambió el TESTFIX: '+p.fixture);
-                        if(fpNorm(d.estatus||d.Estatus||d.ESTATUS)==='RETRABAJO')throw Error(p.fixture+' ya se encuentra en retrabajo. Actualiza.');
+                        if(fpNorm(d.estatus||d.Estatus||d.ESTATUS)==='RETRABAJO'||d.etapaRetrabajo==='Pendiente de envío')throw Error(p.fixture+' ya se encuentra en retrabajo o pendiente de envío. Actualiza.');
                         if(String(d.rack||d.Rack||'')!==p.rack||String(d.ubicacion||d.Ubicacion||'')!==p.ubicacion)throw Error('Cambió la ubicación de '+p.fixture+'. Actualiza.');
                         leidos.push({p,ref,d});
                     }
@@ -2735,7 +2735,7 @@ body{background:#f6f7f8;color:#243441}
                         const previoRack=String(d.rack||d.Rack||'');
                         const previaCelda=String(d.ubicacion||d.Ubicacion||'');
                         tx.update(ref,{
-                            estatus:'Retrabajo',etapaRetrabajo:esPendiente?'Pendiente de envío':'Enviado',
+                            estatus:esPendiente?String(d.estatus||d.Estatus||'Activo'):'Retrabajo',etapaRetrabajo:esPendiente?'Pendiente de envío':'Enviado',
                             motivoRetrabajo:motivo,fechaRetrabajo:esPendiente?'':fecha,
                             fechaPendienteRetrabajo:esPendiente?fecha:'',pendientePorRetrabajo:esPendiente?fpAutor():'',...destino,
                             enviadoPorRetrabajo:'',enviadoPorRetrabajoPuesto:'',enviadoPorRetrabajoEmpleado:'',...remitente,
@@ -2768,7 +2768,7 @@ body{background:#f6f7f8;color:#243441}
         return fpRemitentesHistoricos.get(p.docId)||'No registrado';
     }
     async function fpCargarRemitentesHistoricos(){
-        const faltantes=window.baseDeDatos.filter(p=>fpNorm(p.estatus)==='RETRABAJO'&&!p.enviadoPorRetrabajo);
+        const faltantes=window.baseDeDatos.filter(p=>fpNorm(p.estatus)==='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío'&&!p.enviadoPorRetrabajo);
         if(!faltantes.length||fpRetrabajosHistorialDisponible)return;
         const intento=++fpRetrabajosHistorialConsulta;
         try{
@@ -2840,7 +2840,7 @@ body{background:#f6f7f8;color:#243441}
         window.fpActualizarSeleccionPendientes();
     };
     window.fpActualizarSeleccionPendientes=function(){
-        const validos=new Set(window.baseDeDatos.filter(p=>fpNorm(p.estatus)==='RETRABAJO'&&p.etapaRetrabajo==='Pendiente de envío').map(p=>p.docId));
+        const validos=new Set(window.baseDeDatos.filter(p=>p.etapaRetrabajo==='Pendiente de envío').map(p=>p.docId));
         for(const id of fpReworkPendientesSeleccionados)if(!validos.has(id))fpReworkPendientesSeleccionados.delete(id);
         const cantidad=fpReworkPendientesSeleccionados.size;
         fpGet('fpReworkSelectedCount').textContent=cantidad+' seleccionado(s)';
@@ -2869,7 +2869,7 @@ body{background:#f6f7f8;color:#243441}
         let destino;
         try{destino=fpDestinoRework('retrabajoLote');}catch(e){fpMsg('fpReworkBatchMsg',e.message,true);return;}
         const pallets=ids.map(fpLocalPallet);
-        if(pallets.some(p=>!p||fpNorm(p.estatus)!=='RETRABAJO'||p.etapaRetrabajo!=='Pendiente de envío')){
+        if(pallets.some(p=>!p||p.etapaRetrabajo!=='Pendiente de envío')){
             fpMsg('fpReworkBatchMsg','Hay pendientes que ya cambiaron. Actualiza la vista.',true);return;
         }
         window.mostrarConfirmacion(`¿Confirmar el envío de ${pallets.length} pendientes a ${destino.destinoRetrabajoTipo}${destino.destinoRetrabajoProveedor?' · '+destino.destinoRetrabajoProveedor:''}? Se registrará fecha y remitente para cada TESTFIX.`,async()=>{
@@ -2886,13 +2886,13 @@ body{background:#f6f7f8;color:#243441}
                         const ref=doc(db,'inventario',p.docId),snap=await tx.get(ref);
                         if(!snap.exists())throw Error(p.fixture+' fue eliminado.');
                         const d=snap.data();
-                        if(fpNorm(d.fixture||d.Fixture)!==fpNorm(p.fixture)||fpNorm(d.estatus)!=='RETRABAJO'||d.etapaRetrabajo!=='Pendiente de envío'||
+                        if(fpNorm(d.fixture||d.Fixture)!==fpNorm(p.fixture)||d.etapaRetrabajo!=='Pendiente de envío'||
                           String(d.fechaPendienteRetrabajo||'')!==String(p.fechaPendienteRetrabajo||'')||String(d.motivoRetrabajo||'')!==String(p.motivoRetrabajo||''))
                             throw Error('El pendiente '+p.fixture+' cambió. Actualiza e inténtalo de nuevo.');
                         leidos.push({p,ref});
                     }
                     for(const {p,ref} of leidos){
-                        tx.update(ref,{etapaRetrabajo:'Enviado',fechaRetrabajo:fecha,...destino,...remitente});
+                        tx.update(ref,{estatus:'Retrabajo',etapaRetrabajo:'Enviado',fechaRetrabajo:fecha,...destino,...remitente});
                         tx.set(doc(collection(db,'historial')),{fecha,usuario:fpAutor(),accion:'ENVIO_RETRABAJO',
                             detalle:`${p.fixture} enviado desde pendientes a ${destino.destinoRetrabajoTipo}${destino.destinoRetrabajoProveedor?' · '+destino.destinoRetrabajoProveedor:''}. Motivo: ${p.motivoRetrabajo||'-'}.`});
                     }
@@ -2917,7 +2917,9 @@ body{background:#f6f7f8;color:#243441}
                 const fecha=String(h.fecha||'');
                 const detalle=String(h.detalle||'');
                 const fixture=/^(TESTFIX[^\s.:;,]+)/i.exec(detalle)?.[1]||'Fixture';
-                items.push({id:d.id,fixture,fecha,usuario:String(h.usuario||'No registrado'),detalle});
+                const actual=window.baseDeDatos.find(p=>fpNorm(p.fixture)===fpNorm(fixture));
+                const modelo=actual?.modelo||(/Modelo(?:s)?(?: compatible)?(?:s)?:\s*([^.;]+)/i.exec(detalle)?.[1]||'Sin modelo registrado');
+                items.push({id:d.id,fixture,modelo,fecha,usuario:String(h.usuario||'No registrado'),detalle});
             });
             items.sort((a,b)=>(Date.parse(b.fecha)||0)-(Date.parse(a.fecha)||0));
             fpReworkHistorialFin=items;
@@ -2931,12 +2933,12 @@ body{background:#f6f7f8;color:#243441}
         const cont=fpGet('fpReworkCompletedList');
         if(fpReworkHistorialFin===null){if(!fpReworkCargandoFin)cont.textContent='Abre la pestaña para consultar las finalizaciones.';return;}
         if(!fpReworkHistorialFin.length){cont.textContent='Aún no hay finalizaciones registradas en el historial.';return;}
-        cont.innerHTML=fpReworkHistorialFin.map(h=>`<article class="fp-rework-completed-item"><div class="fp-rework-completed-head"><strong>${fpText(h.fixture)}</strong><span>${fpText(fpFechaRework(h.fecha))}</span></div><p>${fpText(h.detalle)}</p><p><b>Registrado por:</b> ${fpText(h.usuario)}</p></article>`).join('');
+        cont.innerHTML=fpReworkHistorialFin.map(h=>`<article class="fp-rework-completed-item"><div class="fp-rework-completed-head"><strong>${fpText(h.fixture)}</strong><span>${fpText(fpFechaRework(h.fecha))}</span></div><p><b>Modelo(s):</b> ${fpModelosListaHTML(h.modelo)}</p><p>${fpText(h.detalle)}</p><p><b>Registrado por:</b> ${fpText(h.usuario)}</p></article>`).join('');
     }
     window.renderTablaRetrabajos=function(){
-        const inventario=window.baseDeDatos.filter(p=>fpNorm(p.estatus)==='RETRABAJO');
+        const inventario=window.baseDeDatos.filter(p=>fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío');
         const pendientes=inventario.filter(p=>p.etapaRetrabajo==='Pendiente de envío');
-        const enviados=inventario.filter(p=>p.etapaRetrabajo!=='Pendiente de envío');
+        const enviados=inventario.filter(p=>fpNorm(p.estatus)==='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío');
         fpGet('fpReworkNpendientes').textContent=pendientes.length;
         fpGet('fpReworkNenviados').textContent=enviados.length;
         fpGet('fpReworkNfinalizados').textContent=fpReworkHistorialFin===null?'—':fpReworkHistorialFin.length;
@@ -2950,7 +2952,7 @@ body{background:#f6f7f8;color:#243441}
             <td>${fpText(p.fixture)}</td><td>${fpModelosListaHTML(p.modelo)}</td>
             <td>${fpReworkVista==='pendientes'?'Aún no enviado':fpText(fpTextoRemitenteRetrabajo(p))}</td>
             <td style="white-space:pre-wrap">${fpText(p.motivoRetrabajo||'-')}${p.observacionesRetrabajo?`<small style="display:block;margin-top:4px;color:#536376">Observación: ${fpText(p.observacionesRetrabajo)}</small>`:''}</td>
-            <td>${fpReworkVista==='pendientes'?'Pendiente de envío':fpText(fpTextoDestinoRework(p))}</td>
+            <td>${fpReworkVista==='pendientes'?fpText(p.rack&&p.ubicacion?`Rack ${p.rack} · ${p.ubicacion}`:p.rack?`Rack ${p.rack} · sin celda`:'Sin ubicación de rack'):fpText(fpTextoDestinoRework(p))}</td>
             <td><small style="display:block;color:#607080">${fpReworkVista==='pendientes'?'Registro pendiente':'Enviado'}</small>${fpText(fpFechaRework(fpReworkVista==='pendientes'?p.fechaPendienteRetrabajo:p.fechaRetrabajo))}</td>
             <td><div class="fp-action-inline">
               ${fpReworkVista==='pendientes'?`<label class="fp-rework-row-check"><input type="checkbox" aria-label="Seleccionar ${fpText(p.fixture)}" onchange="window.fpTogglePendienteLote(decodeURIComponent('${fpInlineArg(p.docId)}'),this.checked)" ${fpReworkPendientesSeleccionados.has(p.docId)?'checked':''}>Seleccionar</label><button type="button" class="btn-general btn-blue" onclick="window.fpAbrirAccionRetrabajo(decodeURIComponent('${fpInlineArg(p.docId)}'),'enviar')">Enviar</button>`:
@@ -2965,7 +2967,7 @@ body{background:#f6f7f8;color:#243441}
     window.fpCerrarAccionRetrabajo=function(){fpGet('retrabajoAccionForm').style.display='none';fpGet('retrabajoAccionId').value='';fpReworkAccionModo='';};
     window.fpAbrirAccionRetrabajo=function(id,modo){
         const p=fpLocalPallet(id);
-        if(!p||fpNorm(p.estatus)!=='RETRABAJO')return;
+        if(!p||(fpNorm(p.estatus)!=='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío'))return;
         if(modo==='editar'&&usuarioRolActual!=='administrador')return;
         if(modo==='enviar'&&(!fpPuedeGestionarRetrabajo()||p.etapaRetrabajo!=='Pendiente de envío'))return;
         fpReworkAccionModo=modo;
@@ -2986,7 +2988,7 @@ body{background:#f6f7f8;color:#243441}
     window.fpGuardarAccionRetrabajo=async function(){
         if(fpReworkAccionOcupado)return;
         const modo=fpReworkAccionModo,id=fpGet('retrabajoAccionId').value,p=fpLocalPallet(id);
-        if(!p||fpNorm(p.estatus)!=='RETRABAJO')return;
+        if(!p||(fpNorm(p.estatus)!=='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío'))return;
         if(modo==='editar'&&usuarioRolActual!=='administrador')return;
         if(modo==='enviar'&&!fpPuedeGestionarRetrabajo())return;
         const motivo=fpGet('retrabajoAccionMotivo').value.trim();
@@ -3004,11 +3006,11 @@ body{background:#f6f7f8;color:#243441}
                 const ref=doc(db,'inventario',id),snap=await tx.get(ref);
                 if(!snap.exists())throw Error('El fixture fue eliminado.');
                 const actual=snap.data();
-                if(fpNorm(actual.estatus)!=='RETRABAJO'||String(actual.etapaRetrabajo||'')!==String(p.etapaRetrabajo||'')||
+                if(String(actual.estatus||'')!==String(p.estatus||'')||String(actual.etapaRetrabajo||'')!==String(p.etapaRetrabajo||'')||
                   String(actual.fechaRetrabajo||'')!==String(p.fechaRetrabajo||'')||String(actual.motivoRetrabajo||'')!==String(p.motivoRetrabajo||'')||
                   String(actual.destinoRetrabajoTipo||'')!==String(p.destinoRetrabajoTipo||'')||String(actual.destinoRetrabajoProveedor||'')!==String(p.destinoRetrabajoProveedor||''))throw Error('Otro usuario modificó este retrabajo. Actualiza los datos.');
                 if(modo==='enviar'&&actual.etapaRetrabajo!=='Pendiente de envío')throw Error('Ya fue enviado previamente.');
-                const datos=modo==='enviar'?{motivoRetrabajo:motivo,etapaRetrabajo:'Enviado',fechaRetrabajo:ahora,...destino,...fpIdentidadRemitenteRetrabajo()}:
+                const datos=modo==='enviar'?{estatus:'Retrabajo',motivoRetrabajo:motivo,etapaRetrabajo:'Enviado',fechaRetrabajo:ahora,...destino,...fpIdentidadRemitenteRetrabajo()}:
                     {motivoRetrabajo:motivo,observacionesRetrabajo:observacion,...(actual.etapaRetrabajo==='Pendiente de envío'?{}:destino)};
                 tx.update(ref,datos);
                 tx.set(doc(collection(db,'historial')),{fecha:ahora,usuario:fpAutor(),accion:modo==='enviar'?'ENVIO_RETRABAJO':'EDICION_RETRABAJO',
@@ -3026,7 +3028,7 @@ body{background:#f6f7f8;color:#243441}
     window.abrirFinalizarRetrabajo=function(docId){
         if(!fpPuedeGestionarRetrabajo())return window.mostrarAlerta('No tienes permiso para finalizar retrabajos.');
         const p=fpLocalPallet(docId);
-        if(!p||fpNorm(p.estatus)!=='RETRABAJO')return window.mostrarAlerta('El pallet ya no está en retrabajo. Actualiza el inventario.');
+        if(!p||(fpNorm(p.estatus)!=='RETRABAJO'&&p.etapaRetrabajo!=='Pendiente de envío'))return window.mostrarAlerta('El pallet ya no está en retrabajo. Actualiza el inventario.');
         if(p.etapaRetrabajo==='Pendiente de envío')return window.mostrarAlerta('Debes marcar primero el envío a Machine Tool o Proveedor.');
         fpGet('retrabajoFinalizarDocId').value=p.docId;
         fpGet('retrabajoFinalizarInfo').textContent=`${p.fixture} · Técnico: ${p.tecnicoAsignado||'-'} · Retornará a ${fpUbicacionCompleta(p)?`${p.rack}/${p.ubicacion}`:p.retrabajoOrigenSinUbicacion?'Sin ubicación (pendiente de acomodo)':'la ubicación registrada en el historial, si está disponible'}.`;
@@ -3087,7 +3089,7 @@ body{background:#f6f7f8;color:#243441}
                     rackPrevioRetrabajo:'',ubicacionPreviaRetrabajo:'',retrabajoOrigenSinUbicacion:false,
                     enviadoPorRetrabajo:'',enviadoPorRetrabajoPuesto:'',enviadoPorRetrabajoEmpleado:'',destinoRetrabajoTipo:'',destinoRetrabajoProveedor:''});
                 tx.set(doc(collection(db,'historial')),{fecha:new Date().toISOString(),usuario:fpAutor(),accion:'FIN_RETRABAJO',
-                    detalle:`${p.fixture} finalizó retrabajo. Destino: ${fpTextoDestinoRework(p)}. Motivo original: ${p.motivoRetrabajo||'-'}. Trabajo: ${nota||'Sin detalle'}. Ubicación: ${ubicacionRestaurada.rack?ubicacionRestaurada.rack+'/'+ubicacionRestaurada.ubicacion:'Sin ubicación previa'}.`});
+                    detalle:`${p.fixture} finalizó retrabajo. Modelo(s): ${p.modelo||'Sin modelo registrado'}. Destino: ${fpTextoDestinoRework(p)}. Motivo original: ${p.motivoRetrabajo||'-'}. Trabajo: ${nota||'Sin detalle'}. Ubicación: ${ubicacionRestaurada.rack?ubicacionRestaurada.rack+'/'+ubicacionRestaurada.ubicacion:'Sin ubicación previa'}.`});
             });
             fpReworkHistorialFin=null;window.cerrarFinalizarRetrabajo();
             await fpSincronizarTrasGuardar(`✅ ${p.fixture} está Activo${ubicacionRestaurada.rack?' y volvió a '+ubicacionRestaurada.rack+'/'+ubicacionRestaurada.ubicacion:' y permanece sin ubicación asignada'}.`);
@@ -3146,7 +3148,7 @@ body{background:#f6f7f8;color:#243441}
             if(!p){tr.hidden=true;return;}
             const cumpleEstado=estado==='todos'||fpNorm(p.estatus)===fpNorm(estado);
             const cumpleUbicacion=ubicacion==='todos'||
-                (ubicacion==='retrabajo'&&fpNorm(p.estatus)==='RETRABAJO')||
+                (ubicacion==='retrabajo'&&(fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío'))||
                 (ubicacion==='sin'&&fpEsActivo(p)&&!fpUbicacionCompleta(p))||
                 (ubicacion==='con'&&fpEsActivo(p)&&fpUbicacionCompleta(p));
             const cumpleTexto=f.every((v,i)=>!v||fpNorm(tr.children[columnas[i]].textContent).includes(v));
@@ -3244,7 +3246,7 @@ body{background:#f6f7f8;color:#243441}
         fpSetIng('ingTotal',data.length);
         fpSetIng('ingTecnicos',fpIngenieroRoster.filter(x=>x.nombre!=='Sin técnico asignado').length);
         fpSetIng('ingActivos',data.filter(fpEsActivo).length);
-        fpSetIng('ingRetrabajos',data.filter(p=>fpNorm(p.estatus)==='RETRABAJO').length);
+        fpSetIng('ingRetrabajos',data.filter(p=>fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío').length);
         fpSetIng('ingFuera',data.filter(p=>fpNorm(p.estatus)==='FUERA DE USO').length);
         fpSetIng('ingSinUbi',data.filter(p=>fpEsActivo(p)&&!fpUbicacionCompleta(p)).length);
         const filtro=fpNorm(fpGet('visorFiltroTecnico').value);
@@ -3255,7 +3257,7 @@ body{background:#f6f7f8;color:#243441}
             b.setAttribute('aria-selected',String(fpIngenieroSeleccionado===fpNorm(t.nombre)));
             const name=document.createElement('div'),strong=document.createElement('strong'),stats=document.createElement('small'),n=document.createElement('b');
             strong.textContent=t.nombre;
-            const retrabajo=t.pallets.filter(p=>fpNorm(p.estatus)==='RETRABAJO').length;
+            const retrabajo=t.pallets.filter(p=>fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío').length;
             const activos=t.pallets.filter(fpEsActivo).length;
             const fuera=t.pallets.filter(p=>fpNorm(p.estatus)==='FUERA DE USO').length;
             stats.textContent=`${activos} activos · ${retrabajo} retrabajos · ${fuera} fuera de uso`;
@@ -3283,7 +3285,7 @@ body{background:#f6f7f8;color:#243441}
         fpGet('ingenieroDetalleResumen').textContent=`${t.pallets.length} pallet(s) asignados en total`;
         const estado=fpGet('ingenieroFiltroEstado').value,ubicacion=fpGet('ingenieroFiltroUbicacion').value,filtro=fpNorm(fpGet('ingenieroFiltroFixture').value);
         const datos=t.pallets.filter(p=>(estado==='todos'||fpNorm(p.estatus)===fpNorm(estado)) &&
-           (ubicacion==='todos'||ubicacion==='retrabajo'&&fpNorm(p.estatus)==='RETRABAJO'||
+           (ubicacion==='todos'||ubicacion==='retrabajo'&&(fpNorm(p.estatus)==='RETRABAJO'||p.etapaRetrabajo==='Pendiente de envío')||
             ubicacion==='sin'&&fpEsActivo(p)&&!fpUbicacionCompleta(p)||
             ubicacion==='con'&&fpEsActivo(p)&&fpUbicacionCompleta(p)) &&
            (!filtro||fpNorm(p.fixture).includes(filtro)||fpNorm(p.modelo).includes(filtro)));
@@ -3471,9 +3473,9 @@ body{background:#f6f7f8;color:#243441}
         fpGet('resCreador').textContent=p.creadoPorNombre?(p.creadoPorNombre+' · '+(p.creadoPorPuesto||'Sin puesto')):'No registrado';
         fpGet('resFechaAlta').textContent=p.fechaAlta?fpFormatoFecha(p.fechaAlta):'No registrada';
         fpGet('resCantidad').textContent=String(window.fixturesActuales.length);
-        fpGet('dinamicRackTitle').textContent=fpNorm(p.estatus)==='RETRABAJO' ? `⚠️ Retrabajo · Ubicación reservada ${p.rack||'-'}/${p.ubicacion||'-'} (oculto del croquis)` : p.rack?`Rack ${p.rack} · Ubicación ${p.ubicacion||'sin asignar'}`:'Sin ubicación de rack';
+        fpGet('dinamicRackTitle').textContent=fpNorm(p.estatus)==='RETRABAJO' ? `⚠️ En retrabajo · Ubicación de retorno ${p.rack||'-'}/${p.ubicacion||'-'}` : p.etapaRetrabajo==='Pendiente de envío' ? `Pendiente de envío · Sigue en Rack ${p.rack||'-'} / ${p.ubicacion||'sin celda'}` : p.rack?`Rack ${p.rack} · Ubicación ${p.ubicacion||'sin asignar'}`:'Sin ubicación de rack';
         document.querySelectorAll('.rack-box').forEach(x=>x.classList.remove('highlight'));
-        if(fpEsActivo(p)&&p.rack){const box=fpGet('rack-'+p.rack.replace('.','-'));if(box)box.classList.add('highlight');}
+        if((fpEsActivo(p)||p.etapaRetrabajo==='Pendiente de envío')&&p.rack){const box=fpGet('rack-'+p.rack.replace('.','-'));if(box)box.classList.add('highlight');}
         fpShowRack(p.rack, fpEsActivo(p)?p.ubicacion:'', 'detailMatrixContainer');
     };
 
