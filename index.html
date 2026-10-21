@@ -3473,7 +3473,7 @@ body{background:#f6f7f8;color:#243441}
         fpGet('resCreador').textContent=p.creadoPorNombre?(p.creadoPorNombre+' · '+(p.creadoPorPuesto||'Sin puesto')):'No registrado';
         fpGet('resFechaAlta').textContent=p.fechaAlta?fpFormatoFecha(p.fechaAlta):'No registrada';
         fpGet('resCantidad').textContent=String(window.fixturesActuales.length);
-        fpGet('dinamicRackTitle').textContent=fpNorm(p.estatus)==='RETRABAJO' ? `⚠️ En retrabajo · Ubicación de retorno ${p.rack||'-'}/${p.ubicacion||'-'}` : p.etapaRetrabajo==='Pendiente de envío' ? `Pendiente de envío · Sigue en Rack ${p.rack||'-'} / ${p.ubicacion||'sin celda'}` : p.rack?`Rack ${p.rack} · Ubicación ${p.ubicacion||'sin asignar'}`:'Sin ubicación de rack';
+        fpGet('dinamicRackTitle').textContent=p.etapaRetrabajo==='Pendiente de envío' ? `Pendiente de envío · Sigue en Rack ${p.rack||'-'} / ${p.ubicacion||'sin celda'}` : fpNorm(p.estatus)==='RETRABAJO' ? `⚠️ En retrabajo · Ubicación de retorno ${p.rack||'-'}/${p.ubicacion||'-'}` : p.rack?`Rack ${p.rack} · Ubicación ${p.ubicacion||'sin asignar'}`:'Sin ubicación de rack';
         document.querySelectorAll('.rack-box').forEach(x=>x.classList.remove('highlight'));
         if((fpEsActivo(p)||p.etapaRetrabajo==='Pendiente de envío')&&p.rack){const box=fpGet('rack-'+p.rack.replace('.','-'));if(box)box.classList.add('highlight');}
         fpShowRack(p.rack, fpEsActivo(p)?p.ubicacion:'', 'detailMatrixContainer');
